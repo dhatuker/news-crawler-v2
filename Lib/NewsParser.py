@@ -61,8 +61,21 @@ class NewsParserData(object):
         self.driver.get(URL)
         self.driver.implicitly_wait(30)
         time.sleep(20)
+
+        #kalo ada iklan
+        # button = "//*[@id='pclose-btn']"
+        # try :
+        #     close = self.driver.find_element_by_xpath(button)
+        #
+        #     if close is not None:
+        #         WebDriverWait(self.driver, 10).until(
+        #             EC.element_to_be_clickable((By.XPATH, button))).click()
+        # except :
+        #     self.logger.info("No Ads, Keep Going!")
+
+
         #Helper.scroll_down(self.driver)
-        # self.logger.info("start get link")
+        #self.logger.info("start get link")
 
     def openWeb(self):
         self.openLink(self.URL)
@@ -106,16 +119,41 @@ class NewsParserData(object):
         container2 = self.driver.find_elements_by_xpath(xcontainer2)
 
         action_chains = ActionChains(self.driver)
+        alink = []
 
         for i in range(len(container)):
             con = container[i]
             action_chains.move_to_element(con).perform()
 
             xlink = './/a[1]'
-            link = con.find_element_by_xpath(xlink)
-            link2 = link.get_attribute('href')
+            link = con.find_elements_by_xpath(xlink)
+            link_ = link.get_attribute('href')
+            alink.append(link_)
 
-            print('Link : ', link2)
+        for i in alink:
+            self.parsingNews(i)
+
+    def parsingNews(self, link):
+
+        self.openLink(link)
+
+        xtitle = './/h1[@class="headline node-title"]'
+        title = self.driver.find_element_by_xpath(xtitle)
+
+        xname = './/div[@class="author-field author-name"]'
+        name = self.driver.find_elements_by_xpath(xname)
+
+        xcontent = './/p'
+        content = self.driver.find_elements_by_xpath(xcontent)
+
+        print("Title : ", title.text)
+
+        for i in range(len(name)):
+            print("Writer : ",name[i].text)
+
+        for i in range(len(content)):
+            print(content[i].text)
+
 
     def logoutAcc(self):
         #click account
@@ -186,8 +224,8 @@ class NewsParsing(object):
         try:
             self.newsParserData.openWeb()
             self.newsParserData.checkLogin()
-            #self.newsParserData.clickSingapore()
-            #self.newsParserData.getLink()
+            self.newsParserData.clickSingapore()
+            self.newsParserData.getLink()
         finally:
             self.newsParserData.logoutAcc()
 
