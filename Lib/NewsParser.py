@@ -57,12 +57,15 @@ class NewsParserData(object):
     def __del__(self):
         self.driver.quit()
 
-    def openLink(self):
-        self.driver.get(self.URL)
+    def openLink(self, URL):
+        self.driver.get(URL)
         self.driver.implicitly_wait(30)
         time.sleep(20)
         #Helper.scroll_down(self.driver)
         # self.logger.info("start get link")
+
+    def openWeb(self):
+        self.openLink(self.URL)
 
     def checkLogin(self):
         xlogin = "//*[@id='sph_login']"
@@ -84,16 +87,50 @@ class NewsParserData(object):
             password.send_keys('Password13')
             password.send_keys(Keys.ENTER)
 
-            time.sleep(10)
+            time.sleep(20)
 
-    def openNewsLink(self, url):
-        self.driver.get(url)
-        self.driver.implicitly_wait(5)
-        time.sleep(3)
-        Helper.scroll_down(self.driver)
-        page_source = self.driver.page_source
-        soup = BeautifulSoup(page_source, 'lxml')
-        return soup
+    def clickSingapore(self):
+        xsingapore = '//*[@id="navbar"]/div/div[2]/nav/ul/li[2]/a'
+
+        singapore = self.driver.find_element_by_xpath(xsingapore)
+
+        singapore.click()
+
+        time.sleep(20)
+
+    def getLink(self):
+        xcontainer = '//*[@id="block-system-main"]/div/div/div/div/div[3]/div/div/div/div[3]/div/div/div/div'
+        xcontainer2 = '//*[@id="block-system-main"]/div/div/div/div/div[3]/div/div/div/div[5]/div/div/div/div'
+
+        container = self.driver.find_elements_by_xpath(xcontainer)
+        container2 = self.driver.find_elements_by_xpath(xcontainer2)
+
+        action_chains = ActionChains(self.driver)
+
+        for i in range(len(container)):
+            con = container[i]
+            action_chains.move_to_element(con).perform()
+
+            xlink = './/a[1]'
+            link = con.find_element_by_xpath(xlink)
+            link2 = link.get_attribute('href')
+
+            print('Link : ', link2)
+
+    def logoutAcc(self):
+        #click account
+        xacc = './/a[@name="login-user-name"]'
+
+        WebDriverWait(self.driver, 10).until(
+            EC.element_to_be_clickable((By.XPATH, xacc))).click()
+
+        #click logout
+        xlogout = './/a[@class="mysph_logout"]'
+
+        WebDriverWait(self.driver, 10).until(
+            EC.element_to_be_clickable((By.XPATH, xlogout))).click()
+
+        time.sleep(20)
 
 
 class NewsParsing(object):
@@ -144,7 +181,15 @@ class NewsParsing(object):
         self.logger.info("Starting {} on {}".format(type(self).__name__, self.hostname))
         self.newsParserData = NewsParserData(path_to_webdriver=self.config.get('Selenium', 'chromedriver_path'),
                                              config=self.config, logger=self.logger)
-        self.newsParserData.openLink()
-        self.newsParserData.checkLogin()
+
+        #error handling agar tidak dalam posisi login saat error
+        try:
+            self.newsParserData.openWeb()
+            self.newsParserData.checkLogin()
+            #self.newsParserData.clickSingapore()
+            #self.newsParserData.getLink()
+        finally:
+            self.newsParserData.logoutAcc()
+
         self.logger.info("Finish %s" % self.filename)
         # print("--- %s seconds ---" % (time.time() - start_time))
