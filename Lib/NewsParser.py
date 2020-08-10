@@ -5,11 +5,11 @@ import sys
 import configparser
 import os
 import socket
+import pickle
 
 from db.NewsparserDatabaseHandler import NewsparserDatabaseHandler
 from Lib.NewsHelper import Helper
 
-from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options as ChromeOption
 from selenium.webdriver.common.keys import Keys
@@ -26,11 +26,13 @@ class NewsParserData(object):
     cookies = None
     URL = "https://www.straitstimes.com/"
 
-    def __init__(self, path_to_webdriver, config=None, logger=None, cookies=None):
+    def __init__(self, db, path_to_webdriver, config=None, logger=None, cookies=None):
         self.logger = logger
         self.logger.info("webdriver path: ".format(path_to_webdriver))
 
         self.config = config
+
+        # self.cookies_file_path = self.config.get('Selenium', 'cookies_path')
 
         chrome_options = ChromeOption()
 
@@ -46,39 +48,61 @@ class NewsParserData(object):
 
         self.driver = webdriver.Chrome(path_to_webdriver, chrome_options=chrome_options)
 
-        if cookies is None:
-            self.cookies = self.driver.get_cookies()
-        else:
-            for cookie in cookies:
-                self.driver.add_cookie(cookie)
-            self.cookies = cookies
-        # self.db = db
+        # try:
+        #     # load cookies for given websites
+        #     cookies = pickle.load(open(self.cookies_file_path, "rb"))
+        #     for website in self.URL:
+        #         self.driver.get(website)
+        #         for cookie in cookies:
+        #             self.driver.add_cookie(cookie)
+        #         self.driver.refresh()
+        # except Exception as e:
+        #     # it'll fail for the first time, when cookie file is not present
+        #     print(str(e))
+        #     print("Error loading cookies")
+
+        self.db = db
+
+    def save_cookies(self):
+        # save cookies
+        cookies = self.driver.get_cookies()
+        pickle.dump(cookies, open(self.cookies_file_path, "wb"))
 
     def __del__(self):
+        # self.save_cookies()
         self.driver.quit()
 
     def openLink(self, URL):
         self.driver.get(URL)
         self.driver.implicitly_wait(30)
         time.sleep(20)
-
-        #kalo ada iklan
-        # button = "//*[@id='pclose-btn']"
-        # try :
-        #     close = self.driver.find_element_by_xpath(button)
-        #
-        #     if close is not None:
-        #         WebDriverWait(self.driver, 10).until(
-        #             EC.element_to_be_clickable((By.XPATH, button))).click()
-        # except :
-        #     self.logger.info("No Ads, Keep Going!")
-
-
-        #Helper.scroll_down(self.driver)
-        #self.logger.info("start get link")
+        # Helper.scroll_down(self.driver)
+        # self.logger.info("start get link")
 
     def openWeb(self):
         self.openLink(self.URL)
+
+        # kalo ada iklan
+        try:
+            #first iframe
+            xads = '//*[@id="google_ads_iframe_/5908/st/prestitial/homepage_0"]'
+            WebDriverWait(self.driver, 10).until(
+                EC.frame_to_be_available_and_switch_to_it(self.driver.find_element_by_xpath(xads)))
+
+            #second iframe
+            xxads ='//*[@id="2667407632870008044_0-frame"]'
+            WebDriverWait(self.driver, 10).until(
+                EC.frame_to_be_available_and_switch_to_it(self.driver.find_element_by_xpath(xxads)))
+
+            button = "//*[@id='pclose-btn']"
+            WebDriverWait(self.driver, 10).until(
+                EC.element_to_be_clickable((By.XPATH, button))).click()
+
+            time.sleep(3)
+        except:
+            self.logger.info("No Ads, Keep Going!")
+        finally:
+            self.driver.switch_to.default_content()
 
     def checkLogin(self):
         xlogin = "//*[@id='sph_login']"
@@ -126,12 +150,20 @@ class NewsParserData(object):
             action_chains.move_to_element(con).perform()
 
             xlink = './/a[1]'
-            link = con.find_elements_by_xpath(xlink)
+            link = con.find_element_by_xpath(xlink)
             link_ = link.get_attribute('href')
             alink.append(link_)
 
         for i in alink:
             self.parsingNews(i)
+
+    def getDate(self, input):
+        re_date = r"(\d{4}-\d{2}-\d{2}).?(\d{2}:\d{2}:\d{2})"
+
+        date = re.search(re_date, input)
+        time = date.group(1) + " " + date.group(2)
+
+        return time
 
     def parsingNews(self, link):
 
@@ -139,6 +171,15 @@ class NewsParserData(object):
 
         xtitle = './/h1[@class="headline node-title"]'
         title = self.driver.find_element_by_xpath(xtitle)
+        title = title.text
+        self.logger.info("title : {}".format(title))
+
+        xdate = './/meta[@property="article:published_time"]'
+        date = self.driver.find_element_by_xpath(xdate)
+        date_ = date.get_attribute("content")
+
+        tanggal = self.getDate(date_)
+        self.logger.info("published : {}".format(tanggal))
 
         xname = './/div[@class="author-field author-name"]'
         name = self.driver.find_elements_by_xpath(xname)
@@ -146,23 +187,26 @@ class NewsParserData(object):
         xcontent = './/p'
         content = self.driver.find_elements_by_xpath(xcontent)
 
-        print("Title : ", title.text)
-
+        editor = ""
         for i in range(len(name)):
-            print("Writer : ",name[i].text)
+            editor += name[i].text
+        self.logger.info("editor : {}".format(editor))
 
+        content_ = ""
         for i in range(len(content)):
-            print(content[i].text)
+            content_ += content[i].text
+        self.logger.info("content : {}".format(content_))
 
+        self.db.insert_news(title, content_, tanggal, editor, link)
 
     def logoutAcc(self):
-        #click account
+        # click account
         xacc = './/a[@name="login-user-name"]'
 
         WebDriverWait(self.driver, 10).until(
             EC.element_to_be_clickable((By.XPATH, xacc))).click()
 
-        #click logout
+        # click logout
         xlogout = './/a[@class="mysph_logout"]'
 
         WebDriverWait(self.driver, 10).until(
@@ -208,8 +252,7 @@ class NewsParsing(object):
                                                           date_format='%Y%m%d', backup_count=5, bubble=True,
                                                           format_string=format_string)
             self.logger.handlers.append(loghandler)
-        # self.db = NewsparserDatabaseHandler.instantiate_from_configparser(self.config, self.logger)
-
+        self.db = NewsparserDatabaseHandler.instantiate_from_configparser(self.config, self.logger)
 
     def run(self):
         # start_time = time.time()
@@ -217,10 +260,10 @@ class NewsParsing(object):
         self.hostname = socket.gethostname()
         self.hostip = socket.gethostbyname(self.hostname)
         self.logger.info("Starting {} on {}".format(type(self).__name__, self.hostname))
-        self.newsParserData = NewsParserData(path_to_webdriver=self.config.get('Selenium', 'chromedriver_path'),
+        self.newsParserData = NewsParserData(db=self.db, path_to_webdriver=self.config.get('Selenium', 'chromedriver_path'),
                                              config=self.config, logger=self.logger)
 
-        #error handling agar tidak dalam posisi login saat error
+        # error handling agar tidak dalam posisi login saat error
         try:
             self.newsParserData.openWeb()
             self.newsParserData.checkLogin()
