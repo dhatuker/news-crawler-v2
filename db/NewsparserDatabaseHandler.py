@@ -58,15 +58,8 @@ class NewsparserDatabaseHandler(object):
         else:
             raise Exception('cfg is not an instance of configparser')
 
-    def insert_news(self, news_id, title, content, tgl_terbit, comment, share, editor, link):
-        sql = """REPLACE INTO content_table (news_id, title, content, tgl_terbit, total_comment, total_share, editor, link)
-        VALUES (:news_id, :title, :content, :tgl_terbit, :comment, :share, :editor, :link)"""
-        rs = self._db.query(sql, news_id=news_id, title=title, content=content, tgl_terbit=tgl_terbit, comment=comment,
-                            share=share, editor=editor, link=link)
-        return rs
-
-    def get_sumber(self, input):
-        test = '%' + input + '%'
-        sql = """SELECT * FROM sumber_berita WHERE link_sumber LIKE :test"""
-        rs = self._db.query(sql, test=test)
+    def insert_news(self, title, content, tgl_terbit, editor, link):
+        sql = """REPLACE INTO content_table (title, content, tgl_terbit, editor, link)
+        VALUES (:title, :content, :tgl_terbit, :editor, :link)"""
+        rs = self._db.query(sql, title=title, content=content, tgl_terbit=tgl_terbit, editor=editor, link=link)
         return rs
